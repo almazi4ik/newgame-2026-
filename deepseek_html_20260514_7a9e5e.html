@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Fort.io — строй пушки и защищайся</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; }
+        body {
+            background: #0a0f1e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Segoe UI', monospace;
+        }
+        #gameContainer {
+            position: relative;
+        }
+        canvas {
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            cursor: crosshair;
+            display: block;
+            background: #1a2a32;
+        }
+        #ui {
+            position: absolute;
+            top: 15px;
+            left: 15px;
+            background: rgba(0,0,0,0.75);
+            backdrop-filter: blur(8px);
+            padding: 10px 18px;
+            border-radius: 30px;
+            color: white;
+            font-weight: bold;
+            font-size: 18px;
+            pointer-events: none;
+            z-index: 10;
+            font-family: monospace;
+            border-left: 4px solid #ffaa44;
+        }
+        #controls {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(8px);
+            padding: 8px 15px;
+            border-radius: 20px;
+            color: #ccc;
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .building-btn {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: #2c3e66;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            margin-left: 10px;
+            border-radius: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            font-family: monospace;
+            z-index: 20;
+            transition: 0.2s;
+            box-shadow: 0 2px 8px black;
+        }
+        .building-btn:hover {
+            transform: scale(1.05);
+            background: #ffaa44;
+            color: black;
+        }
+        #resources {
+            color: #ffaa44;
+            font-size: 22px;
+        }
+        @media (max-width: 700px) {
+            .building-btn { padding: 6px 10px; font-size: 11px; }
+            #ui { font-size: 14px; top: 8px; left: 8px; }
+        }
+    </style>
+</head>
+<body>
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="ui">
+        🧱 Блоки: <span id="resources">0</span> &nbsp;| ❤️ Здоровье: <span id="hp">100</span>
+    </div>
+    <div id="controls">
+        🖱️ Мышь → движение &nbsp;&nbsp;| &nbsp;&nbsp;🔫 [1] Пушка (5) &nbsp;| 🗼 [2] Башня (8) &nbsp;| 🧱 [3] Стена (3)
+    </div>
+    <button class="building-btn" id="btnTurret">🔫 Пушка (5)</button>
+    <button class="building-btn" id="btnTower">🗼 Башня (8)</button>
+    <button class="building-btn" id="btnWall">🧱 Стена (3)</button>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
