@@ -1,15 +1,8 @@
-// ---------- ПОДКЛЮЧАЕМ ЭФФЕКТЫ ----------
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// Эффекты частиц
-let particles = [];
-
-// Имя игрока
-let playerName = "Воин";
-
-// Размеры мира
-const WORLD_SIZE = 3400;
+// Размер мира
+const WORLD_SIZE = 4000;
 let camX = 0, camY = 0;
 let canvasW, canvasH;
 
@@ -22,209 +15,389 @@ function resizeCanvas() {
 resizeCanvas();
 window.addEventListener('resize', resizeCanvas);
 
-// --- ИГРОК ---
+// ========== ИГРОК (ЧЕЛОВЕК) ==========
+let playerName = "Воин";
 let player = {
-    x: WORLD_SIZE/2,
-    y: WORLD_SIZE/2,
-    radius: 20,
+    x: WORLD_SIZE / 2,
+    y: WORLD_SIZE / 2,
+    radius: 18,
     hp: 100,
     maxHp: 100,
-    invincibleFrames: 0,
-    blocks: 0,
-    kills: 0
+    invincible: 0,
+    level: 1,
+    exp: 0,
+    
+    // Ресурсы
+    wood: 0,
+    stone: 0,
+    iron: 0,
+    
+    // Экипировка
+    weaponTier: 1,  // топор (урон по врагам + добыча дерева)
+    toolTier: 1,    // кирка (добыча камня/железа)
+    
+    attackCd: 0,
+    attackDamage: 15
 };
 
-// --- ПОСТРОЙКИ ---
+// ========== ДЕРЕВЬЯ ==========
+let trees = [];
+const TREE_COUNT = 80;
+
+function spawnTrees() {
+    for(let i = 0; i < TREE_COUNT; i++) {
+        trees.push({
+            x: Math.random() * WORLD_SIZE,
+            y: Math.random() * WORLD_SIZE,
+            radius: 14,
+            hp: 30,
+            woodValue: 8 + Math.floor(Math.random() * 7)
+        });
+    }
+}
+
+// ========== КАМЕННЫЕ ЖИЛЫ ==========
+let stoneNodes = [];
+const STONE_COUNT = 40;
+
+function spawnStones() {
+    for(let i = 0; i < STONE_COUNT; i++) {
+        stoneNodes.push({
+            x: Math.random() * WORLD_SIZE,
+            y: Math.random() * WORLD_SIZE,
+            radius: 16,
+            hp: 45,
+            stoneValue: 6 + Math.floor(Math.random() * 8)
+        });
+    }
+}
+
+// ========== ЖЕЛЕЗНЫЕ РУДЫ ==========
+let ironNodes = [];
+const IRON_COUNT = 25;
+
+function spawnIron() {
+    for(let i = 0; i < IRON_COUNT; i++) {
+        ironNodes.push({
+            x: Math.random() * WORLD_SIZE,
+            y: Math.random() * WORLD_SIZE,
+            radius: 14,
+            hp: 60,
+            ironValue: 4 + Math.floor(Math.random() * 6)
+        });
+    }
+}
+
+// ========== ПОСТРОЙКИ ==========
 let buildings = [];
 let nextId = 1;
 
-const BUILDINGS = {
-    TURRET: { name: 'Пушка', cost:5, radius:22, color:'#e05a5a', range:210, damage:21, cooldownMax:32, shootCd:0 },
-    TOWER: { name: 'Башня', cost:8, radius:24, color:'#a06eaa', range:320, scanOnly:true },
-    WALL: { name: 'Стена', cost:3, radius:16, color:'#618c7a', hp:70, maxHp:70 }
+const BUILDING_RECIPES = {
+    WALL: { wood: 10, stone: 5, iron: 0, name: 'Стена', radius: 16, hp: 120, color: '#7a6a5a' },
+    TURRET: { wood: 15, stone: 10, iron: 5, name: 'Пушка', radius: 22, hp: 80, color: '#c45545', damage: 25, range: 220, cooldown: 0 },
+    TOWER: { wood: 20, stone: 15, iron: 8, name: 'Башня', radius: 24, hp: 100, color: '#9b7aaa', range: 300, scanOnly: true }
 };
 
-// --- РЕСУРСЫ (свечение)---
-let resources = [];
-const RES_COUNT = 55;
-
-function spawnResources() {
-    for(let i=0;i<RES_COUNT;i++) {
-        resources.push({ x: Math.random()*WORLD_SIZE, y: Math.random()*WORLD_SIZE, radius:9, value:1, glow: Math.random()*Math.PI*2 });
-    }
-}
-spawnResources();
-
-// --- ВРАГИ с именами и эффектами---
+// ========== ВРАГИ ==========
 let enemies = [];
-const ENEMY_BASE = 10;
+const ENEMY_BASE = 8;
 
 function spawnEnemy() {
-    let side = Math.floor(Math.random()*4);
-    let x,y;
-    if(side===0){ x=Math.random()*WORLD_SIZE; y=-40; }
-    else if(side===2){ x=Math.random()*WORLD_SIZE; y=WORLD_SIZE+40; }
-    else if(side===1){ x=WORLD_SIZE+40; y=Math.random()*WORLD_SIZE; }
-    else { x=-40; y=Math.random()*WORLD_SIZE; }
-    let radius = 13+Math.random()*12;
-    let names = ["ВИХРЬ","ТАНК","ЩИТ","ОСКОЛОК","МАРКЕР","РЕЙД"];
+    let side = Math.floor(Math.random() * 4);
+    let x, y;
+    if(side === 0) { x = Math.random() * WORLD_SIZE; y = -50; }
+    else if(side === 2) { x = Math.random() * WORLD_SIZE; y = WORLD_SIZE + 50; }
+    else if(side === 1) { x = WORLD_SIZE + 50; y = Math.random() * WORLD_SIZE; }
+    else { x = -50; y = Math.random() * WORLD_SIZE; }
+    
+    let names = ["ГУЛЬ", "СКЕЛЕТ", "ОРК", "ТРОЛЛЬ", "ПРИЗРАК"];
+    let radius = 14 + Math.random() * 10;
     enemies.push({
-        id:Math.random(),
-        x:x,y:y,
-        radius:radius,
-        hp: 38 + radius*1.2,
-        maxHp:38+radius*1.2,
-        damage:13,
-        speed:1.0+Math.random()*0.9,
-        color:`hsl(${25+Math.random()*30},70%,55%)`,
-        name: names[Math.floor(Math.random()*names.length)]
+        id: Math.random(),
+        x: x, y: y,
+        radius: radius,
+        hp: 40 + radius,
+        maxHp: 40 + radius,
+        damage: 12,
+        speed: 0.9 + Math.random() * 0.7,
+        name: names[Math.floor(Math.random() * names.length)],
+        color: `hsl(${20 + Math.random() * 40}, 65%, 48%)`
     });
 }
-for(let i=0;i<ENEMY_BASE;i++) spawnEnemy();
 
-// --- ПОДСВЕТКА И ЭФФЕКТЫ ---
-function addParticle(x,y,color) {
-    particles.push({ x,y, vx:(Math.random()-0.5)*3, vy:(Math.random()-0.5)*3, life:0.8, color });
+// ========== ЭФФЕКТЫ ==========
+let particles = [];
+
+function addParticle(x, y, color) {
+    for(let i = 0; i < 5; i++) {
+        particles.push({
+            x: x + (Math.random() - 0.5) * 10,
+            y: y + (Math.random() - 0.5) * 10,
+            vx: (Math.random() - 0.5) * 3,
+            vy: (Math.random() - 0.5) * 3 - 2,
+            life: 0.6 + Math.random() * 0.4,
+            color: color
+        });
+    }
 }
 
-// --- ПЕРЕМЕННЫЕ МЫШИ---
+// ========== МЫШЬ ==========
 let mouseWorldX = player.x, mouseWorldY = player.y;
+let isAttacking = false;
+
 canvas.addEventListener('mousemove', (e) => {
     const rect = canvas.getBoundingClientRect();
-    let canvasX = (e.clientX - rect.left) * (canvasW/rect.width);
-    let canvasY = (e.clientY - rect.top) * (canvasH/rect.height);
+    let canvasX = (e.clientX - rect.left) * (canvasW / rect.width);
+    let canvasY = (e.clientY - rect.top) * (canvasH / rect.height);
     mouseWorldX = camX + canvasX;
     mouseWorldY = camY + canvasY;
-    mouseWorldX = Math.min(Math.max(mouseWorldX,0), WORLD_SIZE);
-    mouseWorldY = Math.min(Math.max(mouseWorldY,0), WORLD_SIZE);
+    mouseWorldX = Math.min(Math.max(mouseWorldX, 0), WORLD_SIZE);
+    mouseWorldY = Math.min(Math.max(mouseWorldY, 0), WORLD_SIZE);
 });
 
+// КЛИК для атаки
+canvas.addEventListener('mousedown', (e) => {
+    if(e.button === 0) isAttacking = true;
+});
+canvas.addEventListener('mouseup', () => { isAttacking = false; });
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+
+// ========== ДВИЖЕНИЕ ==========
 function movePlayer() {
     let dx = mouseWorldX - player.x;
     let dy = mouseWorldY - player.y;
-    let dist = Math.hypot(dx,dy);
-    let speed = 5.2;
-    if(dist>3){
-        let move = Math.min(speed, dist-2);
-        let ang = Math.atan2(dy,dx);
-        player.x += Math.cos(ang)*move;
-        player.y += Math.sin(ang)*move;
+    let dist = Math.hypot(dx, dy);
+    let speed = 4.8;
+    if(dist > 5) {
+        let move = Math.min(speed, dist - 3);
+        let ang = Math.atan2(dy, dx);
+        player.x += Math.cos(ang) * move;
+        player.y += Math.sin(ang) * move;
     }
     player.x = Math.min(Math.max(player.x, player.radius), WORLD_SIZE - player.radius);
     player.y = Math.min(Math.max(player.y, player.radius), WORLD_SIZE - player.radius);
-    if(player.invincibleFrames>0) player.invincibleFrames--;
+    if(player.invincible > 0) player.invincible--;
+    if(player.attackCd > 0) player.attackCd--;
 }
 
-function collectResources() {
-    for(let i=0;i<resources.length;i++){
-        let r=resources[i];
-        if(Math.hypot(player.x-r.x, player.y-r.y) < player.radius+r.radius){
-            player.blocks += r.value;
-            addParticle(r.x, r.y, "#ffaa44");
-            resources[i] = { x:Math.random()*WORLD_SIZE, y:Math.random()*WORLD_SIZE, radius:9, value:1, glow:Math.random()*Math.PI*2 };
-            updateUI();
+// ========== АТАКА (рубить деревья, камни, врагов) ==========
+function attack() {
+    if(!isAttacking) return;
+    if(player.attackCd > 0) return;
+    
+    let attackRange = player.radius + 25;
+    let damage = player.attackDamage + player.weaponTier * 3;
+    
+    // Атака деревьев
+    for(let i = 0; i < trees.length; i++) {
+        let t = trees[i];
+        let dist = Math.hypot(player.x - t.x, player.y - t.y);
+        if(dist < attackRange) {
+            t.hp -= damage;
+            addParticle(t.x, t.y, "#8B5E3C");
+            player.attackCd = 12;
+            if(t.hp <= 0) {
+                player.wood += t.woodValue;
+                trees.splice(i, 1);
+                addParticle(t.x, t.y, "#4CAF50");
+                gainExp(8);
+                // новое дерево
+                trees.push({
+                    x: Math.random() * WORLD_SIZE,
+                    y: Math.random() * WORLD_SIZE,
+                    radius: 14,
+                    hp: 30,
+                    woodValue: 8 + Math.floor(Math.random() * 7)
+                });
+                updateUI();
+            }
+            return;
+        }
+    }
+    
+    // Атака камней
+    for(let i = 0; i < stoneNodes.length; i++) {
+        let s = stoneNodes[i];
+        let dist = Math.hypot(player.x - s.x, player.y - s.y);
+        if(dist < attackRange) {
+            let toolBonus = player.toolTier * 4;
+            s.hp -= damage + toolBonus;
+            addParticle(s.x, s.y, "#aaaaaa");
+            player.attackCd = 12;
+            if(s.hp <= 0) {
+                player.stone += s.stoneValue;
+                stoneNodes.splice(i, 1);
+                addParticle(s.x, s.y, "#888888");
+                gainExp(10);
+                spawnStones();
+                updateUI();
+            }
+            return;
+        }
+    }
+    
+    // Атака железа
+    for(let i = 0; i < ironNodes.length; i++) {
+        let ir = ironNodes[i];
+        let dist = Math.hypot(player.x - ir.x, player.y - ir.y);
+        if(dist < attackRange) {
+            let toolBonus = player.toolTier * 4;
+            ir.hp -= damage + toolBonus;
+            addParticle(ir.x, ir.y, "#3a6ea5");
+            player.attackCd = 12;
+            if(ir.hp <= 0) {
+                player.iron += ir.ironValue;
+                ironNodes.splice(i, 1);
+                addParticle(ir.x, ir.y, "#2a4e85");
+                gainExp(12);
+                spawnIron();
+                updateUI();
+            }
+            return;
+        }
+    }
+    
+    // Атака врагов
+    for(let i = 0; i < enemies.length; i++) {
+        let e = enemies[i];
+        let dist = Math.hypot(player.x - e.x, player.y - e.y);
+        if(dist < attackRange) {
+            e.hp -= damage;
+            addParticle(e.x, e.y, "#ff6666");
+            player.attackCd = 10;
+            if(e.hp <= 0) {
+                player.wood += 3;
+                player.stone += 2;
+                gainExp(15);
+                enemies.splice(i, 1);
+                addParticle(e.x, e.y, "#ffaa44");
+                spawnEnemy();
+                updateUI();
+            }
+            return;
         }
     }
 }
 
-function updateUI() {
-    document.getElementById('resourcesDisplay').innerText = Math.floor(player.blocks);
-    document.getElementById('hpDisplay').innerText = Math.max(0, player.hp);
-    let percent = (player.hp/player.maxHp)*100;
-    document.getElementById('hpFill').style.width = percent+'%';
+// ========== ОПЫТ И УРОВНИ ==========
+function gainExp(amount) {
+    player.exp += amount;
+    let expNeeded = player.level * 50;
+    if(player.exp >= expNeeded) {
+        player.level++;
+        player.exp -= expNeeded;
+        player.maxHp += 15;
+        player.hp = player.maxHp;
+        player.attackDamage += 4;
+        
+        // Выбор улучшения
+        let upgrade = confirm(`🏆 УРОВЕНЬ ${player.level}! Выберите улучшение:\n1 - Сила атаки +5\n2 - Макс. здоровье +20\n3 - Скорость добычи`);
+        if(upgrade === true) {
+            // для простоты: если OK -> сила атаки
+            player.attackDamage += 5;
+        } else if(upgrade === false) {
+            player.maxHp += 20;
+            player.hp = player.maxHp;
+        }
+        updateUI();
+        gainExp(0);
+    }
 }
 
-function tryBuild(typeKey) {
-    let type = BUILDINGS[typeKey];
-    if(!type) return false;
-    if(player.blocks < type.cost) return false;
+// ========== ПОСТРОЙКА ==========
+function tryBuild(type) {
+    let recipe = BUILDING_RECIPES[type];
+    if(!recipe) return false;
+    if(player.wood < recipe.wood || player.stone < recipe.stone || player.iron < recipe.iron) return false;
+    
     let angle = Math.atan2(mouseWorldY - player.y, mouseWorldX - player.x);
-    let buildX = player.x + Math.cos(angle)*(player.radius + type.radius + 8);
-    let buildY = player.y + Math.sin(angle)*(player.radius + type.radius + 8);
-    for(let b of buildings){
-        if(Math.hypot(buildX-b.x, buildY-b.y) < b.radius+type.radius+8) return false;
-    }
-    let newBuild = {
+    let buildX = player.x + Math.cos(angle) * (player.radius + recipe.radius + 8);
+    let buildY = player.y + Math.sin(angle) * (player.radius + recipe.radius + 8);
+    
+    buildings.push({
         id: nextId++,
-        type: typeKey,
-        x: buildX, y: buildY, radius: type.radius,
-        hp: type.hp || 9999, maxHp: type.maxHp || 9999,
-        shootCd: 0
-    };
-    buildings.push(newBuild);
-    player.blocks -= type.cost;
-    addParticle(buildX, buildY, "#88ffaa");
+        type: type,
+        x: buildX, y: buildY,
+        radius: recipe.radius,
+        hp: recipe.hp,
+        maxHp: recipe.hp,
+        shootCd: 0,
+        color: recipe.color
+    });
+    
+    player.wood -= recipe.wood;
+    player.stone -= recipe.stone;
+    player.iron -= recipe.iron;
+    addParticle(buildX, buildY, "#ffcc88");
     updateUI();
     return true;
 }
 
+// ========== ОБНОВЛЕНИЕ ПОСТРОЕК ==========
 function updateBuildings() {
-    for(let b of buildings){
-        if(b.type === 'TURRET'){
-            if(b.shootCd>0){ b.shootCd--; continue; }
-            let closest=null; let minD=Infinity;
-            for(let e of enemies){
-                let d = Math.hypot(b.x-e.x, b.y-e.y);
-                if(d<BUILDINGS.TURRET.range && e.hp>0 && d<minD){ minD=d; closest=e; }
-            }
-            if(closest){
-                closest.hp -= BUILDINGS.TURRET.damage;
-                b.shootCd = BUILDINGS.TURRET.cooldownMax;
-                addParticle(closest.x, closest.y, "#ff6666");
-                if(closest.hp<=0){
-                    player.blocks += 3;
-                    updateUI();
-                    addParticle(closest.x, closest.y, "#ffff88");
+    for(let b of buildings) {
+        if(b.type === 'TURRET') {
+            if(b.shootCd > 0) { b.shootCd--; continue; }
+            let closest = null;
+            let minDist = Infinity;
+            for(let e of enemies) {
+                let d = Math.hypot(b.x - e.x, b.y - e.y);
+                if(d < BUILDING_RECIPES.TURRET.range && e.hp > 0 && d < minDist) {
+                    minDist = d;
+                    closest = e;
                 }
+            }
+            if(closest) {
+                closest.hp -= BUILDING_RECIPES.TURRET.damage;
+                b.shootCd = 30;
+                addParticle(closest.x, closest.y, "#ff8888");
             }
         }
     }
 }
 
+// ========== ДВИЖЕНИЕ ВРАГОВ И БОЙ ==========
 function moveEnemies() {
-    for(let i=0;i<enemies.length;i++){
+    for(let i = 0; i < enemies.length; i++) {
         let e = enemies[i];
-        if(e.hp<=0){
-            player.blocks += 3;
-            updateUI();
-            enemies.splice(i,1);
-            spawnEnemy();
-            continue;
-        }
         let dx = player.x - e.x;
         let dy = player.y - e.y;
-        let distToP = Math.hypot(dx,dy);
-        if(distToP>1){
-            let ang = Math.atan2(dy,dx);
-            let move = Math.min(e.speed, distToP-4);
-            e.x += Math.cos(ang)*move;
-            e.y += Math.sin(ang)*move;
+        let dist = Math.hypot(dx, dy);
+        if(dist > 3) {
+            let ang = Math.atan2(dy, dx);
+            let move = Math.min(e.speed, dist - 5);
+            e.x += Math.cos(ang) * move;
+            e.y += Math.sin(ang) * move;
         }
-        e.x = Math.min(Math.max(e.x,5), WORLD_SIZE-5);
-        e.y = Math.min(Math.max(e.y,5), WORLD_SIZE-5);
         
-        let dP = Math.hypot(player.x-e.x, player.y-e.y);
-        if(dP < player.radius+e.radius && player.invincibleFrames<=0){
+        e.x = Math.min(Math.max(e.x, 5), WORLD_SIZE - 5);
+        e.y = Math.min(Math.max(e.y, 5), WORLD_SIZE - 5);
+        
+        // Урон игроку
+        let d = Math.hypot(player.x - e.x, player.y - e.y);
+        if(d < player.radius + e.radius && player.invincible <= 0) {
             player.hp -= e.damage;
-            player.invincibleFrames = 20;
+            player.invincible = 25;
             updateUI();
-            addParticle(player.x, player.y, "#ffaaaa");
-            if(player.hp<=0){
-                alert(`💀 ${playerName} был уничтожен... Перезапуск!`);
+            addParticle(player.x, player.y, "#ff4444");
+            if(player.hp <= 0) {
+                alert(`💀 ${playerName} погиб. Перезапуск...`);
                 initGame();
                 return;
             }
         }
-        for(let b of buildings){
-            if(b.type==='WALL'){
-                let dW = Math.hypot(e.x-b.x, e.y-b.y);
-                if(dW < e.radius+b.radius){
-                    b.hp -= e.damage*0.8;
-                    let angle = Math.atan2(e.y-b.y, e.x-b.x);
-                    e.x += Math.cos(angle)*9;
-                    e.y += Math.sin(angle)*9;
-                    if(b.hp<=0){
-                        buildings = buildings.filter(w=>w.id!==b.id);
+        
+        // Урон стенам
+        for(let b of buildings) {
+            if(b.type === 'WALL') {
+                let dw = Math.hypot(e.x - b.x, e.y - b.y);
+                if(dw < e.radius + b.radius) {
+                    b.hp -= e.damage * 0.7;
+                    let ang = Math.atan2(e.y - b.y, e.x - b.x);
+                    e.x += Math.cos(ang) * 12;
+                    e.y += Math.sin(ang) * 12;
+                    if(b.hp <= 0) {
+                        buildings = buildings.filter(w => w.id !== b.id);
                         addParticle(b.x, b.y, "#aa8866");
                     }
                 }
@@ -233,200 +406,214 @@ function moveEnemies() {
     }
 }
 
+// ========== КАМЕРА ==========
 function updateCamera() {
-    camX = player.x - canvasW/2;
-    camY = player.y - canvasH/2;
-    camX = Math.min(Math.max(camX,0), WORLD_SIZE-canvasW);
-    camY = Math.min(Math.max(camY,0), WORLD_SIZE-canvasH);
+    camX = player.x - canvasW / 2;
+    camY = player.y - canvasH / 2;
+    camX = Math.min(Math.max(camX, 0), WORLD_SIZE - canvasW);
+    camY = Math.min(Math.max(camY, 0), WORLD_SIZE - canvasH);
 }
 
-// --- ОТРИСОВКА С ПОСЛЕСВЕЧЕНИЕМ И ГРАДИЕНТАМИ---
+// ========== UI ==========
+function updateUI() {
+    document.getElementById('playerNameLabel').innerText = playerName;
+    document.getElementById('levelValue').innerText = player.level;
+    document.getElementById('woodValue').innerText = Math.floor(player.wood);
+    document.getElementById('stoneValue').innerText = Math.floor(player.stone);
+    document.getElementById('hpValue').innerText = Math.max(0, player.hp);
+    document.getElementById('weaponTier').innerText = player.weaponTier;
+    document.getElementById('toolTier').innerText = player.toolTier;
+    let percent = (player.hp / player.maxHp) * 100;
+    document.getElementById('hpFill').style.width = percent + '%';
+}
+
+// ========== ОТРИСОВКА ==========
 function draw() {
     updateCamera();
-    ctx.clearRect(0,0,canvasW,canvasH);
+    ctx.clearRect(0, 0, canvasW, canvasH);
     
-    // декоративная сетка
-    ctx.strokeStyle = "rgba(100,180,255,0.08)";
-    ctx.lineWidth = 1;
-    for(let i=0;i<WORLD_SIZE;i+=150){
-        ctx.beginPath();
-        ctx.moveTo(i-camX, 0); ctx.lineTo(i-camX, canvasH);
-        ctx.moveTo(0, i-camY); ctx.lineTo(canvasW, i-camY);
-        ctx.stroke();
-    }
+    // Трава/сетка
+    ctx.fillStyle = "#1a3a2f";
+    ctx.fillRect(0, 0, canvasW, canvasH);
     
-    // ресурсы (сияющие)
-    for(let r of resources){
-        let grad = ctx.createRadialGradient(r.x-camX-2, r.y-camY-2, 2, r.x-camX, r.y-camY, r.radius);
-        grad.addColorStop(0, "#3b9eff");
-        grad.addColorStop(1, "#1a4cbb");
+    // Деревья
+    for(let t of trees) {
+        ctx.fillStyle = "#4a7a4a";
         ctx.beginPath();
-        ctx.arc(r.x-camX, r.y-camY, r.radius-1, 0, Math.PI*2);
-        ctx.fillStyle = grad;
+        ctx.rect(t.x - camX - 6, t.y - camY - 10, 12, 20);
         ctx.fill();
-        ctx.fillStyle = "#ffffffdd";
-        ctx.font = "bold 12px monospace";
-        ctx.fillText("◆", r.x-camX-4, r.y-camY+4);
+        ctx.fillStyle = "#2a5a2a";
+        ctx.beginPath();
+        ctx.arc(t.x - camX, t.y - camY - 6, 10, 0, Math.PI * 2);
+        ctx.fill();
+        // полоска HP
+        let percent = t.hp / 30;
+        ctx.fillStyle = "#aa4444";
+        ctx.fillRect(t.x - camX - 12, t.y - camY - 18, 24, 4);
+        ctx.fillStyle = "#44aa44";
+        ctx.fillRect(t.x - camX - 12, t.y - camY - 18, 24 * percent, 4);
     }
     
-    // постройки
-    for(let b of buildings){
-        ctx.shadowBlur = 12;
-        ctx.shadowColor = "rgba(0,0,0,0.6)";
+    // Камни
+    for(let s of stoneNodes) {
+        ctx.fillStyle = "#7a7a6a";
         ctx.beginPath();
-        ctx.arc(b.x-camX, b.y-camY, b.radius, 0, Math.PI*2);
-        if(b.type==='TURRET') ctx.fillStyle = "#c44545";
-        else if(b.type==='TOWER') ctx.fillStyle = "#aa77bb";
-        else ctx.fillStyle = "#6e9e8a";
+        ctx.ellipse(s.x - camX, s.y - camY, 12, 8, 0, 0, Math.PI * 2);
+        ctx.fill();
+        let percent = s.hp / 45;
+        ctx.fillStyle = "#aa4444";
+        ctx.fillRect(s.x - camX - 12, s.y - camY - 12, 24, 4);
+        ctx.fillStyle = "#aaaa44";
+        ctx.fillRect(s.x - camX - 12, s.y - camY - 12, 24 * percent, 4);
+    }
+    
+    // Железо
+    for(let i of ironNodes) {
+        ctx.fillStyle = "#5a8aaa";
+        ctx.beginPath();
+        ctx.ellipse(i.x - camX, i.y - camY, 10, 7, 0, 0, Math.PI * 2);
+        ctx.fill();
+        let percent = i.hp / 60;
+        ctx.fillStyle = "#aa4444";
+        ctx.fillRect(i.x - camX - 10, i.y - camY - 12, 20, 4);
+        ctx.fillStyle = "#44aaff";
+        ctx.fillRect(i.x - camX - 10, i.y - camY - 12, 20 * percent, 4);
+    }
+    
+    // Постройки
+    for(let b of buildings) {
+        ctx.fillStyle = b.color;
+        ctx.beginPath();
+        ctx.arc(b.x - camX, b.y - camY, b.radius, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = "#ffcc88";
         ctx.lineWidth = 2;
         ctx.stroke();
-        ctx.fillStyle = "white";
-        ctx.font = "bold 16px monospace";
-        if(b.type==='TURRET') ctx.fillText("⚡", b.x-camX-8, b.y-camY+7);
-        if(b.type==='TOWER') ctx.fillText("🗼", b.x-camX-8, b.y-camY+8);
-        if(b.type==='WALL') ctx.fillText("🧱", b.x-camX-8, b.y-camY+7);
-        
-        if(b.type==='WALL' && b.hp<b.maxHp){
-            let percent = b.hp/b.maxHp;
-            ctx.fillStyle = "#aa4a4a";
-            ctx.fillRect(b.x-camX-14, b.y-camY-14, 28, 5);
-            ctx.fillStyle = "#88cc88";
-            ctx.fillRect(b.x-camX-14, b.y-camY-14, 28*percent, 4);
-        }
+        if(b.type === 'TURRET') ctx.fillText("🔫", b.x - camX - 8, b.y - camY + 7);
+        if(b.type === 'TOWER') ctx.fillText("🗼", b.x - camX - 8, b.y - camY + 8);
+        if(b.type === 'WALL') ctx.fillText("🧱", b.x - camX - 8, b.y - camY + 7);
+        let hpPercent = b.hp / b.maxHp;
+        ctx.fillStyle = "#aa4444";
+        ctx.fillRect(b.x - camX - 14, b.y - camY - 16, 28, 4);
+        ctx.fillStyle = "#88ff88";
+        ctx.fillRect(b.x - camX - 14, b.y - camY - 16, 28 * hpPercent, 4);
     }
     
-    // враги
-    for(let e of enemies){
-        ctx.shadowBlur = 6;
-        ctx.beginPath();
-        ctx.arc(e.x-camX, e.y-camY, e.radius-1, 0, Math.PI*2);
+    // Враги
+    for(let e of enemies) {
         ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.arc(e.x - camX, e.y - camY, e.radius, 0, Math.PI * 2);
         ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 18px monospace";
-        ctx.fillText("👾", e.x-camX-10, e.y-camY+7);
-        ctx.font = "bold 9px 'Orbitron'";
-        ctx.fillStyle = "#ffccaa";
-        ctx.fillText(e.name, e.x-camX-12, e.y-camY-10);
-        let hpPercent = e.hp/e.maxHp;
-        ctx.fillStyle = "#8a3a3a";
-        ctx.fillRect(e.x-camX-14, e.y-camY-18, 28, 5);
-        ctx.fillStyle = "#6fbf6f";
-        ctx.fillRect(e.x-camX-14, e.y-camY-18, 28*hpPercent, 4);
+        ctx.fillStyle = "white";
+        ctx.font = "bold 10px monospace";
+        ctx.fillText(e.name, e.x - camX - 12, e.y - camY - 12);
+        let hpPercent = e.hp / e.maxHp;
+        ctx.fillStyle = "#aa4444";
+        ctx.fillRect(e.x - camX - 14, e.y - camY - 18, 28, 4);
+        ctx.fillStyle = "#ffaa44";
+        ctx.fillRect(e.x - camX - 14, e.y - camY - 18, 28 * hpPercent, 4);
     }
     
-    // игрок с аурой
-    ctx.shadowBlur = 20;
-    ctx.shadowColor = "#62ff88";
-    let grad = ctx.createRadialGradient(player.x-camX-5, player.y-camY-5, 5, player.x-camX, player.y-camY, player.radius);
-    grad.addColorStop(0, "#6cdf7c");
-    grad.addColorStop(1, "#359f55");
+    // Игрок (человек)
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = "#6ab06a";
     ctx.beginPath();
-    ctx.arc(player.x-camX, player.y-camY, player.radius, 0, Math.PI*2);
-    ctx.fillStyle = grad;
+    ctx.arc(player.x - camX, player.y - camY, player.radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = "#ffffaa";
-    ctx.lineWidth = 3;
-    ctx.stroke();
-    ctx.font = "bold 18px 'Press Start 2P'";
-    ctx.fillStyle = "#ffffee";
-    ctx.shadowBlur = 8;
-    ctx.fillText("🛡️", player.x-camX-12, player.y-camY+8);
-    ctx.font = "bold 11px monospace";
-    ctx.fillStyle = "#ffffbb";
-    ctx.fillText(playerName, player.x-camX-20, player.y-camY-16);
+    ctx.fillStyle = "#2a3a2a";
+    ctx.beginPath();
+    ctx.ellipse(player.x - camX - 5, player.y - camY - 5, 4, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(player.x - camX + 5, player.y - camY - 5, 4, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    // оружие в руке
+    let angleToMouse = Math.atan2(mouseWorldY - player.y, mouseWorldX - player.x);
+    let handX = player.x + Math.cos(angleToMouse) * 16;
+    let handY = player.y + Math.sin(angleToMouse) * 16;
+    ctx.fillStyle = "#8B5E3C";
+    ctx.fillRect(handX - camX - 3, handY - camY - 2, 20, 5);
+    ctx.fillStyle = "#cc8844";
+    ctx.fillRect(handX - camX + 12, handY - camY - 4, 8, 8);
     
-    // полоска HP игрока
-    let hpPercent = player.hp/player.maxHp;
-    ctx.fillStyle = "#9a3a2a";
-    ctx.fillRect(player.x-camX-24, player.y-camY-28, 48, 7);
-    ctx.fillStyle = "#ffbb66";
-    ctx.fillRect(player.x-camX-24, player.y-camY-28, 48*hpPercent, 6);
+    ctx.fillStyle = "white";
+    ctx.font = "bold 10px 'Press Start 2P'";
+    ctx.fillText(playerName, player.x - camX - 20, player.y - camY - 18);
+    ctx.font = "bold 9px monospace";
+    ctx.fillText(`Lv.${player.level}`, player.x - camX - 12, player.y - camY - 28);
     
-    // частицы
-    for(let i=0;i<particles.length;i++){
-        let p=particles[i];
+    // Частицы
+    for(let i = 0; i < particles.length; i++) {
+        let p = particles[i];
         ctx.globalAlpha = p.life;
         ctx.fillStyle = p.color;
         ctx.beginPath();
-        ctx.arc(p.x-camX, p.y-camY, 3, 0, Math.PI*2);
+        ctx.arc(p.x - camX, p.y - camY, 3, 0, Math.PI * 2);
         ctx.fill();
-        p.x+=p.vx;
-        p.y+=p.vy;
-        p.life-=0.02;
-        if(p.life<=0) particles.splice(i,1);
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;
+        if(p.life <= 0) particles.splice(i, 1);
     }
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
 }
 
+// ========== ИНИЦИАЛИЗАЦИЯ ==========
+function initGame() {
+    player.x = WORLD_SIZE / 2;
+    player.y = WORLD_SIZE / 2;
+    player.hp = player.maxHp;
+    player.wood = 20;
+    player.stone = 10;
+    player.iron = 5;
+    player.level = 1;
+    player.exp = 0;
+    player.weaponTier = 1;
+    player.toolTier = 1;
+    player.attackDamage = 15;
+    
+    trees = [];
+    stoneNodes = [];
+    ironNodes = [];
+    buildings = [];
+    enemies = [];
+    
+    spawnTrees();
+    spawnStones();
+    spawnIron();
+    for(let i = 0; i < ENEMY_BASE; i++) spawnEnemy();
+    updateUI();
+}
+
+// ========== ЦИКЛ ==========
 function gameLoop() {
     movePlayer();
-    collectResources();
+    attack();
     updateBuildings();
     moveEnemies();
     draw();
     requestAnimationFrame(gameLoop);
 }
 
-function initGame() {
-    player.x = WORLD_SIZE/2;
-    player.y = WORLD_SIZE/2;
-    player.hp = player.maxHp;
-    player.blocks = 0;
-    player.invincibleFrames = 0;
-    buildings = [];
-    resources = [];
-    enemies = [];
-    spawnResources();
-    for(let i=0;i<ENEMY_BASE;i++) spawnEnemy();
-    updateUI();
-}
-
-// --- МЕНЮ И СТАРТ ---
-document.getElementById('playButton').addEventListener('click', () => {
+// ========== ЗАПУСК ==========
+document.getElementById('playButton').onclick = () => {
     let nick = document.getElementById('nicknameInput').value.trim();
-    if(nick !== "") playerName = nick.slice(0,16);
-    else playerName = "ЗАЩИТНИК";
+    if(nick) playerName = nick.slice(0, 16);
     document.getElementById('menuOverlay').style.display = 'none';
     document.getElementById('gameContainer').style.display = 'block';
     initGame();
     gameLoop();
-});
+};
 
-// КНОПКИ ПОСТРОЕК В ИГРЕ
-document.getElementById('btnTurretUI').onclick = () => tryBuild('TURRET');
-document.getElementById('btnTowerUI').onclick = () => tryBuild('TOWER');
-document.getElementById('btnWallUI').onclick = () => tryBuild('WALL');
+// Кнопки построек
+document.getElementById('btnWall').onclick = () => tryBuild('WALL');
+document.getElementById('btnTurret').onclick = () => tryBuild('TURRET');
+document.getElementById('btnTower').onclick = () => tryBuild('TOWER');
+
 window.addEventListener('keydown', (e) => {
-    if(e.key === '1') tryBuild('TURRET');
-    if(e.key === '2') tryBuild('TOWER');
-    if(e.key === '3') tryBuild('WALL');
+    if(e.key === '1') tryBuild('WALL');
+    if(e.key === '2') tryBuild('TURRET');
+    if(e.key === '3') tryBuild('TOWER');
 });
-
-// --- ФОН С ЧАСТИЦАМИ (красиво)---
-const particlesCanvas = document.getElementById('particles-canvas');
-const pCtx = particlesCanvas.getContext('2d');
-function resizeParticles() {
-    particlesCanvas.width = window.innerWidth;
-    particlesCanvas.height = window.innerHeight;
-}
-resizeParticles();
-window.addEventListener('resize', resizeParticles);
-let bgParticles = [];
-for(let i=0;i<90;i++){
-    bgParticles.push({ x:Math.random()*window.innerWidth, y:Math.random()*window.innerHeight, size:1+Math.random()*2, alpha:Math.random()*0.5 });
-}
-function drawBgParticles() {
-    pCtx.clearRect(0,0, particlesCanvas.width, particlesCanvas.height);
-    for(let p of bgParticles){
-        pCtx.fillStyle = `rgba(255,200,100,${p.alpha})`;
-        pCtx.beginPath();
-        pCtx.arc(p.x, p.y, p.size, 0, Math.PI*2);
-        pCtx.fill();
-    }
-    requestAnimationFrame(drawBgParticles);
-}
-drawBgParticles();
